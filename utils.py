@@ -10,6 +10,7 @@ import scipy.misc
 import numpy as np
 from time import gmtime, strftime
 from six.moves import xrange
+import datetime
 
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
@@ -26,8 +27,17 @@ def get_image(image_path, input_height, input_width,
               resize_height=64, resize_width=64,
               crop=True, grayscale=False):
   image = imread(image_path, grayscale)
-  return transform(image, input_height, input_width,
-                   resize_height, resize_width, crop)
+  try:
+      return transform(image, input_height, input_width, resize_height, resize_width, crop)
+  except ValueError:
+      print('Corrupted Image. Path: ', image_path)
+
+def center_and_norm(x):
+    print('normalization input min/max: ',np.min(x[0]),np.max(x[0]))
+    x = (x - np.mean(x)) / np.std(x)
+    x = 2 * ((x - np.min(x))/(np.max(x) - np.min(x))) - 1
+    print('normalization output min/max: ',np.min(x[0]),np.max(x[0]))
+    return x
 
 def save_images(images, size, image_path):
   return imsave(inverse_transform(images), size, image_path)
@@ -76,11 +86,11 @@ def center_crop(x, crop_h, crop_w,
   return scipy.misc.imresize(
       x[j:j+crop_h, i:i+crop_w], [resize_h, resize_w])
 
-def transform(image, input_height, input_width, 
+def transform(image, input_height, input_width,
               resize_height=64, resize_width=64, crop=True):
   if crop:
     cropped_image = center_crop(
-      image, input_height, input_width, 
+      image, input_height, input_width,
       resize_height, resize_width)
   else:
     cropped_image = scipy.misc.imresize(image, [resize_height, resize_width])
@@ -122,8 +132,8 @@ def to_json(output_path, *layers):
 
         lines += """
           var layer_%s = {
-            "layer_type": "fc", 
-            "sy": 1, "sx": 1, 
+            "layer_type": "fc",
+            "sy": 1, "sx": 1,
             "out_sx": 1, "out_sy": 1,
             "stride": 1, "pad": 0,
             "out_depth": %s, "in_depth": %s,
@@ -139,7 +149,7 @@ def to_json(output_path, *layers):
 
         lines += """
           var layer_%s = {
-            "layer_type": "deconv", 
+            "layer_type": "deconv",
             "sy": 5, "sx": 5,
             "out_sx": %s, "out_sy": %s,
             "stride": 2, "pad": 1,
@@ -248,3 +258,7 @@ def image_manifold_size(num_images):
   manifold_w = int(np.ceil(np.sqrt(num_images)))
   assert manifold_h * manifold_w == num_images
   return manifold_h, manifold_w
+
+def timestamp(format='%Y_%m_%d_%H_%M_%S'):
+    """Returns the current time as a string."""
+    return datetime.datetime.now().strftime(format)

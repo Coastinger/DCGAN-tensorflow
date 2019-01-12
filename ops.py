@@ -1,5 +1,5 @@
 import math
-import numpy as np 
+import numpy as np
 import tensorflow as tf
 
 from tensorflow.python.framework import ops
@@ -35,7 +35,7 @@ class batch_norm(object):
 
   def __call__(self, x, train=True):
     return tf.contrib.layers.batch_norm(x,
-                      decay=self.momentum, 
+                      decay=self.momentum,
                       updates_collections=None,
                       epsilon=self.epsilon,
                       scale=True,
@@ -49,13 +49,16 @@ def conv_cond_concat(x, y):
   return concat([
     x, y*tf.ones([x_shapes[0], x_shapes[1], x_shapes[2], y_shapes[3]])], 3)
 
-def conv2d(input_, output_dim, 
+def conv2d(input_, output_dim,
        k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
-       name="conv2d"):
+       name="conv2d", padding='SAME'):
   with tf.variable_scope(name):
+    if padding=='VALID':
+      paddings = np.array([[0,0],[1,1],[1,1],[0,0]])
+      input_ = tf.pad(input_, paddings)
     w = tf.get_variable('w', [k_h, k_w, input_.get_shape()[-1], output_dim],
               initializer=tf.truncated_normal_initializer(stddev=stddev))
-    conv = tf.nn.conv2d(input_, w, strides=[1, d_h, d_w, 1], padding='SAME')
+    conv = tf.nn.conv2d(input_, w, strides=[1, d_h, d_w, 1], padding=padding)
 
     biases = tf.get_variable('biases', [output_dim], initializer=tf.constant_initializer(0.0))
     conv = tf.reshape(tf.nn.bias_add(conv, biases), conv.get_shape())
@@ -69,7 +72,7 @@ def deconv2d(input_, output_shape,
     # filter : [height, width, output_channels, in_channels]
     w = tf.get_variable('w', [k_h, k_w, output_shape[-1], input_.get_shape()[-1]],
               initializer=tf.random_normal_initializer(stddev=stddev))
-    
+
     try:
       deconv = tf.nn.conv2d_transpose(input_, w, output_shape=output_shape,
                 strides=[1, d_h, d_w, 1])
@@ -86,7 +89,22 @@ def deconv2d(input_, output_shape,
       return deconv, w, biases
     else:
       return deconv
-     
+
+def resizeconv(input_, output_shape, k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02, name="resconv", with_w=False):
+  with tf.variable_scope(name):
+    # The 4 is because of same padding in tf.nn.conv2d.
+    resized = tf.image.resize_nearest_neighbor(input_,((output_shape[1]-1)*d_h + k_h - 4, \
+                                                        (output_shape[2]-1)*d_w + k_w - 4))
+    w = tf.get_variable('w', [k_h, k_w, resized.get_shape()[-1], output_shape[-1]],
+		initializer=tf.truncated_normal_initializer(stddev=stddev))
+    resconv = tf.nn.conv2d(resized, w, strides=[1, d_h, d_w, 1], padding='SAME')
+    biases = tf.get_variable('biases', output_shape[-1], initializer=tf.constant_initializer(0.0))
+    resconv = tf.reshape(tf.nn.bias_add(resconv, biases), output_shape)
+    if with_w:
+        return resconv, w, biases
+    else:
+        return resconv
+
 def lrelu(x, leak=0.2, name="lrelu"):
   return tf.maximum(x, leak*x)
 
