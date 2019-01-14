@@ -90,6 +90,7 @@ def deconv2d(input_, output_shape,
     else:
       return deconv
 
+# alternative form of upsampling, against checkerboard-artefacts [Odena 2016, Distill]
 def resizeconv(input_, output_shape, k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02, name="resconv", with_w=False):
   with tf.variable_scope(name):
     # The 4 is because of same padding in tf.nn.conv2d.

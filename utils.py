@@ -33,10 +33,10 @@ def get_image(image_path, input_height, input_width,
       print('Corrupted Image. Path: ', image_path)
 
 def center_and_norm(x):
-    print('normalization input min/max: ',np.min(x[0]),np.max(x[0]))
+    #print('[SETUP] raw input min/max: ',np.min(x[0]),np.max(x[0]))
     x = (x - np.mean(x)) / np.std(x)
     x = 2 * ((x - np.min(x))/(np.max(x) - np.min(x))) - 1
-    print('normalization output min/max: ',np.min(x[0]),np.max(x[0]))
+    #print('[SETUP] centered and normalized output min/max: ',np.min(x[0]),np.max(x[0]))
     return x
 
 def save_images(images, size, image_path):
