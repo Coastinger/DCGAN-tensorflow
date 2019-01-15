@@ -77,7 +77,7 @@ class DCGAN(object):
     if self.dataset_name == 'mnist':
       self.data_X, self.data_y = self.load_mnist()
       self.c_dim = self.data_X[0].shape[-1]
-      print(self.data_X[0])
+      #print(self.data_X[0])
     else:
       data_path = os.path.join(self.data_dir, self.dataset_name, self.input_fname_pattern)
       self.data = glob(data_path)
@@ -127,7 +127,14 @@ class DCGAN(object):
 
     self.d_sum = histogram_summary("d", self.D)
     self.d__sum = histogram_summary("d_", self.D_)
+    self.d_c_sum = histogram_summary("d_c", self.D_c)
+    self.d_c__sum = histogram_summary("d_c_", self.D_c_)
     self.G_sum = image_summary("G", self.G)
+
+    if self.y_dim:
+        correct_prediction = tf.equal(tf.argmax(self.y,1), tf.argmax(self.D_c,1))
+        self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        self.accuracy_sum = scalar_summary("accuracy", self.accuracy)
 
     def sigmoid_cross_entropy_with_logits(x, y):
       try:
@@ -135,18 +142,34 @@ class DCGAN(object):
       except:
         return tf.nn.sigmoid_cross_entropy_with_logits(logits=x, targets=y)
 
+    true_label = tf.random_uniform(tf.shape(self.D),.9, 1.0)
+
     self.d_loss_real = tf.reduce_mean(
-      sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
+      sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D) * true_label))
     self.d_loss_fake = tf.reduce_mean(
       sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
-    self.g_loss = tf.reduce_mean(
+    self.g_loss_fake = tf.reduce_mean(
       sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
+
+    if self.use_can:
+      self.d_loss_class_real = tf.reduce_mean(
+        tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.D_c_logits,
+          labels=self.y))
+      self.g_loss_class_fake = tf.reduce_mean(
+        tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.D_c_logits_,
+          labels=(1.0/self.y_dim)*tf.ones_like(self.D_c_)))
+      self.d_loss_class_real_sum = scalar_summary("d_loss_class_real", self.d_loss_class_real)
+      self.g_loss_class_fake_sum = scalar_summary("g_loss_class_fake", self.g_loss_class_fake)
+
+      self.d_loss = self.d_loss_real + self.d_loss_fake + self.d_loss_class_real
+      self.g_loss = self.g_loss_fake + self.g_loss_class_fake
+    else:
+      self.d_loss = self.d_loss_real + self.d_loss_fake
+      self.g_loss = self.g_loss_fake
 
     self.d_loss_real_sum = scalar_summary("d_loss_real", self.d_loss_real)
     self.d_loss_fake_sum = scalar_summary("d_loss_fake", self.d_loss_fake)
-
-    self.d_loss = self.d_loss_real + self.d_loss_fake
-
+    self.g_loss_fake = scalar_summary("g_loss_fake", self.g_loss_fake)
     self.g_loss_sum = scalar_summary("g_loss", self.g_loss)
     self.d_loss_sum = scalar_summary("d_loss", self.d_loss)
 
@@ -167,10 +190,12 @@ class DCGAN(object):
     except:
       tf.initialize_all_variables().run()
 
-    self.g_sum = merge_summary([self.z_sum, self.d__sum,
-      self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
-    self.d_sum = merge_summary(
-        [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
+    self.g_sum = merge_summary([self.z_sum, self.d__sum, self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
+    if self.use_can:
+      self.d_sum = merge_summary([self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum, \
+                        self.d_loss_class_real_sum, self.g_loss_class_fake_sum, self.accuracy_sum])
+    else:
+      self.d_sum = merge_summary([self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
     self.writer = SummaryWriter("./logs/log_" + self.model_dir + '_' + timestamp() + '/', self.sess.graph)
 
     sample_z = np.random.uniform(-1, 1, size=(self.sample_num , self.z_dim))
@@ -274,6 +299,14 @@ class DCGAN(object):
               self.z: batch_z,
               self.y: batch_labels
           })
+          errD_class_real = self.d_loss_class_real.eval({
+              self.inputs: batch_images,
+              self.y: batch_labels
+          })
+          acc = self.accuracy.eval({
+              self.inputs: batch_images,
+              self.y: batch_labels
+          })
         else:
           # Update D network
           _, summary_str = self.sess.run([d_optim, self.d_sum],
@@ -295,9 +328,14 @@ class DCGAN(object):
           errG = self.g_loss.eval({self.z: batch_z})
 
         counter += 1
-        print("Epoch: [%2d/%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
-          % (epoch, config.epoch, idx, batch_idxs,
-            time.time() - start_time, errD_fake+errD_real, errG))
+        if self.use_can:
+            print("Epoch: [%2d/%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f, acc: %.8f" \
+              % (epoch, config.epoch, idx, batch_idxs,
+                time.time() - start_time, errD_fake+errD_real+errD_class_real, errG, acc))
+        else:
+            print("Epoch: [%2d/%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
+              % (epoch, config.epoch, idx, batch_idxs,
+                time.time() - start_time, errD_fake+errD_real, errG))
 
         if np.mod(counter, 100) == 1:
           if config.dataset == 'mnist' or 'wikiart':
@@ -358,7 +396,7 @@ class DCGAN(object):
         h6 = lrelu(linear(h5, 512, 'd_h6_lin'))
         h7 = linear(h6, self.y_dim, 'd_h7_lin') # hier ohne y
 
-        return tf.nn.sigmoid(h4), h4, 1, 1# tf.nn.softmax(h7), h7
+        return tf.nn.sigmoid(h4), h4, tf.nn.softmax(h7), h7
       else:
         print('D img y: ',image)
         yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
