@@ -3,7 +3,7 @@ import scipy.misc
 import numpy as np
 
 from model import DCGAN
-from utils import pp, visualize, to_json, show_all_variables
+from utils import pp, visualize, show_all_variables
 
 import tensorflow as tf
 
@@ -26,8 +26,8 @@ flags.DEFINE_boolean("train", False, "True for training, False for testing [Fals
 flags.DEFINE_integer("y_dim", 10, "The size of provided labels. [10]")
 flags.DEFINE_boolean("crop", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
-flags.DEFINE_integer("generate_test_images", 100, "Number of images to generate during test. [100]")
 flags.DEFINE_boolean("use_can", False, "Use CAN implementation. [False]")
+flags.DEFINE_boolean("use_slim_can", False, "Use slim CAN implementation. [False]")
 FLAGS = flags.FLAGS
 
 def main(_):
@@ -58,14 +58,14 @@ def main(_):
           batch_size=FLAGS.batch_size,
           sample_num=FLAGS.batch_size,
           y_dim=FLAGS.y_dim,
-          z_dim=FLAGS.generate_test_images,
           dataset_name=FLAGS.dataset,
           input_fname_pattern=FLAGS.input_fname_pattern,
           crop=FLAGS.crop,
           checkpoint_dir=FLAGS.checkpoint_dir,
           sample_dir=FLAGS.sample_dir,
           data_dir=FLAGS.data_dir,
-          use_can=FLAGS.use_can)
+          use_can=FLAGS.use_can,
+          use_slim_can=FLAGS.use_slim_can)
     else:
       dcgan = DCGAN(
           sess,
@@ -75,7 +75,6 @@ def main(_):
           output_height=FLAGS.output_height,
           batch_size=FLAGS.batch_size,
           sample_num=FLAGS.batch_size,
-          z_dim=FLAGS.generate_test_images,
           dataset_name=FLAGS.dataset,
           input_fname_pattern=FLAGS.input_fname_pattern,
           crop=FLAGS.crop,
@@ -92,14 +91,10 @@ def main(_):
       if not dcgan.load(FLAGS.checkpoint_dir)[0]:
         raise Exception("[!] Train a model first, then run test mode")
 
-
-    # to_json("./web/js/layers.js", [dcgan.h0_w, dcgan.h0_b, dcgan.g_bn0],
-    #                 [dcgan.h1_w, dcgan.h1_b, dcgan.g_bn1],
-    #                 [dcgan.h2_w, dcgan.h2_b, dcgan.g_bn2],
-    #                 [dcgan.h3_w, dcgan.h3_b, dcgan.g_bn3],
-    #                 [dcgan.h4_w, dcgan.h4_b, None])
-
     # Below is codes for visualization
+    # 1 = random batch
+    # 2 = interpolation between -1 and 1
+    # 3 = interpolation between 2 random vecs
     OPTION = 1
     visualize(sess, dcgan, FLAGS, OPTION)
 

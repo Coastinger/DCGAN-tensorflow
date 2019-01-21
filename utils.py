@@ -33,7 +33,6 @@ def get_image(image_path, input_height, input_width,
       print('Corrupted Image. Path: ', image_path)
 
 def center_and_norm(x):
-    #print('normalization input min/max: ',np.min(x[0]),np.max(x[0]))
     x = (x - np.mean(x)) / np.std(x)
     x = 2 * ((x - np.min(x))/(np.max(x) - np.min(x))) - 1
     #print('normalization output min/max: ',np.min(x[0]),np.max(x[0]))
@@ -99,69 +98,6 @@ def transform(image, input_height, input_width,
 def inverse_transform(images):
   return (images+1.)/2.
 
-def to_json(output_path, *layers):
-  with open(output_path, "w") as layer_f:
-    lines = ""
-    for w, b, bn in layers:
-      layer_idx = w.name.split('/')[0].split('h')[1]
-
-      B = b.eval()
-
-      if "lin/" in w.name:
-        W = w.eval()
-        depth = W.shape[1]
-      else:
-        W = np.rollaxis(w.eval(), 2, 0)
-        depth = W.shape[0]
-
-      biases = {"sy": 1, "sx": 1, "depth": depth, "w": ['%.2f' % elem for elem in list(B)]}
-      if bn != None:
-        gamma = bn.gamma.eval()
-        beta = bn.beta.eval()
-
-        gamma = {"sy": 1, "sx": 1, "depth": depth, "w": ['%.2f' % elem for elem in list(gamma)]}
-        beta = {"sy": 1, "sx": 1, "depth": depth, "w": ['%.2f' % elem for elem in list(beta)]}
-      else:
-        gamma = {"sy": 1, "sx": 1, "depth": 0, "w": []}
-        beta = {"sy": 1, "sx": 1, "depth": 0, "w": []}
-
-      if "lin/" in w.name:
-        fs = []
-        for w in W.T:
-          fs.append({"sy": 1, "sx": 1, "depth": W.shape[0], "w": ['%.2f' % elem for elem in list(w)]})
-
-        lines += """
-          var layer_%s = {
-            "layer_type": "fc",
-            "sy": 1, "sx": 1,
-            "out_sx": 1, "out_sy": 1,
-            "stride": 1, "pad": 0,
-            "out_depth": %s, "in_depth": %s,
-            "biases": %s,
-            "gamma": %s,
-            "beta": %s,
-            "filters": %s
-          };""" % (layer_idx.split('_')[0], W.shape[1], W.shape[0], biases, gamma, beta, fs)
-      else:
-        fs = []
-        for w_ in W:
-          fs.append({"sy": 5, "sx": 5, "depth": W.shape[3], "w": ['%.2f' % elem for elem in list(w_.flatten())]})
-
-        lines += """
-          var layer_%s = {
-            "layer_type": "deconv",
-            "sy": 5, "sx": 5,
-            "out_sx": %s, "out_sy": %s,
-            "stride": 2, "pad": 1,
-            "out_depth": %s, "in_depth": %s,
-            "biases": %s,
-            "gamma": %s,
-            "beta": %s,
-            "filters": %s
-          };""" % (layer_idx, 2**(int(layer_idx)+2), 2**(int(layer_idx)+2),
-               W.shape[0], W.shape[3], biases, gamma, beta, fs)
-    layer_f.write(" ".join(lines.replace("'","").split()))
-
 def make_gif(images, fname, duration=2, true_image=False):
   import moviepy.editor as mpy
 
@@ -180,78 +116,67 @@ def make_gif(images, fname, duration=2, true_image=False):
   clip.write_gif(fname, fps = len(images) / duration)
 
 def visualize(sess, dcgan, config, option):
+  print('visualize...')
   image_frame_dim = int(math.ceil(config.batch_size**.5))
   if option == 0:
-    z_sample = np.random.uniform(-0.5, 0.5, size=(config.batch_size, dcgan.z_dim))
+    print('option 0, one random test batch.')
+    z_sample = np.random.normal(0, 1, size=(config.batch_size, dcgan.z_dim))
+    z_sample /= np.linalg.norm(z_sample, axis=0)
+    print('z_sample: ', z_sample)
     samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
     save_images(samples, [image_frame_dim, image_frame_dim], './samples/test_%s.png' % strftime("%Y-%m-%d-%H-%M-%S", gmtime()))
   elif option == 1:
-    values = np.arange(0, 1, 1./config.batch_size)
-    for idx in xrange(dcgan.z_dim):
-      print(" [*] %d" % idx)
-      z_sample = np.random.uniform(-1, 1, size=(config.batch_size , dcgan.z_dim))
-      for kdx, z in enumerate(z_sample):
-        z[idx] = values[kdx]
-
-      if config.dataset == "mnist":
-        y = np.random.choice(10, config.batch_size)
-        y_one_hot = np.zeros((config.batch_size, 10))
-        y_one_hot[np.arange(config.batch_size), y] = 1
-
-        samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample, dcgan.y: y_one_hot})
-      else:
-        samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
-
-      save_images(samples, [image_frame_dim, image_frame_dim], './samples/test_arange_%s.png' % (idx))
+    print('option 1, interpolation from constant -1 to 1.')
+    values = np.arange(-1, 1, 2./config.batch_size)
+    print('values shape: ', values.shape)
+    z_sample = np.ones([config.batch_size, dcgan.z_dim])
+    #print(z_sample)
+    for idx, z in enumerate(z_sample):
+        z_sample[idx] = z * values[idx]
+        #s_inter = slerp(values[idx], -1, 1)
+        #print('spherical test: ', values[idx], ' -> ', s_inter)
+    #print(z_sample)
+    z_sample /= np.linalg.norm(z_sample, axis=0)
+    samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
+    save_images(samples, [image_frame_dim, image_frame_dim], './samples/test_inter_oneTOone_%s.png' % strftime("%Y-%m-%d-%H-%M-%S", gmtime()))
   elif option == 2:
-    values = np.arange(0, 1, 1./config.batch_size)
-    for idx in [random.randint(0, dcgan.z_dim - 1) for _ in xrange(dcgan.z_dim)]:
-      print(" [*] %d" % idx)
-      z = np.random.uniform(-0.2, 0.2, size=(dcgan.z_dim))
-      z_sample = np.tile(z, (config.batch_size, 1))
-      #z_sample = np.zeros([config.batch_size, dcgan.z_dim])
-      for kdx, z in enumerate(z_sample):
-        z[idx] = values[kdx]
-
-      if config.dataset == "mnist":
-        y = np.random.choice(10, config.batch_size)
-        y_one_hot = np.zeros((config.batch_size, 10))
-        y_one_hot[np.arange(config.batch_size), y] = 1
-
-        samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample, dcgan.y: y_one_hot})
-      else:
-        samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
-
-      try:
-        make_gif(samples, './samples/test_gif_%s.gif' % (idx))
-      except:
-        save_images(samples, [image_frame_dim, image_frame_dim], './samples/test_%s.png' % strftime("%Y-%m-%d-%H-%M-%S", gmtime()))
+    print('option 2, interpolation between two random vecs.')
+    z_sample = np.random.normal(0, 1, size=(2, dcgan.z_dim))
+    print('z_samples: ', z_sample[0], z_sample[1])
+    way = z_sample[0] - z_sample[1]
+    mean_dist = np.sum(way) / dcgan.z_dim
+    print('mean dist: ', mean_dist)
+    way = way / (config.batch_size-1)
+    inter = np.tile(z_sample[0], [config.batch_size, 1])
+    for i, elem in enumerate(inter):
+        inter[i] = elem - i * way
+    inter /= np.linalg.norm(inter, axis=0)
+    samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: inter})
+    save_images(samples, [image_frame_dim, image_frame_dim], './samples/test_inter_2random_%s.png' % strftime("%Y-%m-%d-%H-%M-%S", gmtime()))
   elif option == 3:
-    values = np.arange(0, 1, 1./config.batch_size)
-    for idx in xrange(dcgan.z_dim):
-      print(" [*] %d" % idx)
-      z_sample = np.zeros([config.batch_size, dcgan.z_dim])
-      for kdx, z in enumerate(z_sample):
-        z[idx] = values[kdx]
+    print('option 3, interpolation between .')
+    origin = np.random.normal(0, 1, size=(1, dcgan.z_dim))
+    origin = np.tile(origin, [config.batch_size, 1])
+    for i, elem in enumerate(origin):
+        elem[1] = i * (2/64)
+        origin[i] = elem
+    print(origin[0])
+    print(origin[-1])
+    origin /= np.linalg.norm(origin, axis=0)
+    samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: origin})
+    save_images(samples, [image_frame_dim, image_frame_dim], './samples/test_origin_%s.png' % strftime("%Y-%m-%d-%H-%M-%S", gmtime()))
 
-      samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
-      make_gif(samples, './samples/test_gif_%s.gif' % (idx))
-  elif option == 4:
-    image_set = []
-    values = np.arange(0, 1, 1./config.batch_size)
-
-    for idx in xrange(dcgan.z_dim):
-      print(" [*] %d" % idx)
-      z_sample = np.zeros([config.batch_size, dcgan.z_dim])
-      for kdx, z in enumerate(z_sample): z[idx] = values[kdx]
-
-      image_set.append(sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample}))
-      make_gif(image_set[-1], './samples/test_gif_%s.gif' % (idx))
-
-    new_image_set = [merge(np.array([images[idx] for images in image_set]), [10, 10]) \
-        for idx in range(64) + range(63, -1, -1)]
-    make_gif(new_image_set, './samples/test_gif_merged.gif', duration=8)
-
+# github: dribnet/plat - spherical interpolation (with boundarie [-1,1])
+def slerp(val, low, high):
+  if val <= -1:
+      return low
+  elif val >= 1:
+      return high
+  elif np.allclose(low,high):
+      return low
+  omega = np.arccos(np.dot(low/np.linalg.norm(low), high/np.linalg.norm(high)))
+  so = np.sin(omega)
+  return np.sin((1.0-val)*omega) / so * low + np.sin(val*omega) / so * high
 
 def image_manifold_size(num_images):
   manifold_h = int(np.floor(np.sqrt(num_images)))

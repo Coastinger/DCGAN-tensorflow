@@ -42,6 +42,12 @@ class batch_norm(object):
                       is_training=train,
                       scope=self.name)
 
+def sigmoid_cross_entropy_with_logits(x, y):
+  try:
+    return tf.nn.sigmoid_cross_entropy_with_logits(logits=x, labels=y)
+  except:
+    return tf.nn.sigmoid_cross_entropy_with_logits(logits=x, targets=y)
+
 def conv_cond_concat(x, y):
   """Concatenate conditioning vector on feature map axis."""
   x_shapes = x.get_shape()

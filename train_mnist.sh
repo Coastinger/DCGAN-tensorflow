@@ -13,6 +13,5 @@ python3 main.py \
 --y_dim 10 \
 --crop False \
 --visualize False \
---generate_test_images 10 \
 --use_can True \
 --train
