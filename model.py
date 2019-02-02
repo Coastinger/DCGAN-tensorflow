@@ -10,6 +10,8 @@ from six.moves import xrange
 from ops import *
 from utils import *
 
+from scipy.spatial.distance import cdist
+
 def conv_out_size_same(size, stride):
   return int(math.ceil(float(size) / float(stride)))
 
@@ -20,7 +22,6 @@ class DCGAN(object):
          gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='default',
          input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None, data_dir='./data', use_can=False, use_slim_can=False):
     """
-
     Args:
       sess: TensorFlow session
       batch_size: The size of batch. Should be specified before training.
@@ -121,7 +122,7 @@ class DCGAN(object):
 
     self.inputs = tf.placeholder(tf.float32, [self.batch_size] + image_dims, name='real_images')
 
-    inputs = self.inputs
+    inputs = self.inputs #TODO: with decay + tf.random.normal(shape=self.inputs.shape, mean=0.0, stddev=0.1, dtype=tf.float32)
 
     self.z = tf.placeholder(tf.float32, [None, self.z_dim], name='z')
     self.z_sum = histogram_summary("z", self.z)
@@ -148,7 +149,7 @@ class DCGAN(object):
       sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D) * true_label))
     self.d_loss_fake = tf.reduce_mean(
       sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
-    self.g_loss_fake = tf.reduce_mean(
+    self.g_loss_fake = tf.reduce_mean( # TODO: rename to g_loss_real (summary prob)
       sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
 
     if self.use_can or self.use_slim_can:
@@ -200,10 +201,12 @@ class DCGAN(object):
 
     #sample_z = np.random.uniform(-1, 1, size=(self.sample_num , self.z_dim))
     sample_z = np.random.normal(0, 1, size=(self.sample_num , self.z_dim))
-    sample_z /= np.linalg.norm(sample_z, axis=0)
     print('sample_z shape : ', sample_z.shape)
-    for i, elem in enumerate(sample_z):
-        print('sample_z ', i, ' :', elem)
+
+    dist_matrix = cdist(sample_z, sample_z, 'euclidean')
+    print('dist_matrix: ', dist_matrix)
+    dist_matrix_mean = np.sum(dist_matrix, axis=1) / self.z_dim
+    print('dist matrix mean: ', dist_matrix_mean)
 
     if config.dataset == 'mnist':
       sample_inputs = self.data_X[0:self.sample_num]
@@ -218,7 +221,8 @@ class DCGAN(object):
                     resize_width=self.output_width,
                     crop=self.crop,
                     grayscale=self.grayscale) for sample_file in sample_files]
-      sample = center_and_norm(sample)
+      #print('[SETUP] Data Input min/max before norm: ',np.min(sample[0]),np.max(sample[0]))
+      #sample = center_and_norm(sample)
       print('[SETUP] Data Input min/max: ',np.min(sample[0]),np.max(sample[0]))
       if self.y_dim:
         sample_labels = self.get_labels(sample_files)
@@ -226,6 +230,8 @@ class DCGAN(object):
         sample_inputs = np.array(sample).astype(np.float32)[:, :, :, None]
       else:
         sample_inputs = np.array(sample).astype(np.float32)
+      print('sample shape: ', sample_inputs.shape)
+      save_images(sample_inputs, image_manifold_size(sample_inputs.shape[0]), 'sample_inputs_preview.png')
 
     counter = 1
     start_time = time.time()
@@ -258,17 +264,20 @@ class DCGAN(object):
                         resize_width=self.output_width,
                         crop=self.crop,
                         grayscale=self.grayscale) for batch_file in batch_files]
-          batch = center_and_norm(batch)
+          #batch = center_and_norm(batch)
           if self.y_dim:
             batch_labels = self.get_labels(batch_files)
           if self.grayscale:
             batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
           else:
             batch_images = np.array(batch).astype(np.float32)
+          if epoch == 0 and idx == 0:
+            print('Batch shape: ', batch_images.shape)
+            save_images(batch_images, image_manifold_size(sample_inputs.shape[0]), 'batch_images_preview.png')
 
         #batch_z = np.random.uniform(-1, 1, [config.batch_size, self.z_dim]).astype(np.float32)
         batch_z = np.random.normal(0, 1, [config.batch_size, self.z_dim]).astype(np.float32)
-        batch_z /= np.linalg.norm(batch_z, axis=0)
+        #batch_z /= np.linalg.norm(batch_z, axis=0)
 
         #if config.dataset == 'mnist' or config.dataset == 'wikiart':
         if self.y_dim:
@@ -415,10 +424,10 @@ class DCGAN(object):
       elif self.use_slim_can:
         print('D img slim-CAN: ',image)
         # NO padding, otherwise MNIST results are white
-        h0 = lrelu(conv2d(image, self.df_dim, k_h=4, k_w=4, name='d_h0_conv')) #, padding='VALID'
-        h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, k_h=4, k_w=4, name='d_h1_conv')))
-        h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, k_h=4, k_w=4, name='d_h2_conv')))
-        h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, k_h=4, k_w=4, name='d_h3_conv')))
+        h0 = lrelu(conv2d(image, self.df_dim, k_h=4, k_w=4, name='d_h0_conv', padding='VALID')) # TODO , padding='VALID'
+        h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, k_h=4, k_w=4, name='d_h1_conv', padding='VALID')))
+        h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, k_h=4, k_w=4, name='d_h2_conv', padding='VALID')))
+        h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, k_h=4, k_w=4, name='d_h3_conv', padding='VALID')))
         # real / fake
         h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h4_lin')
         # style classification

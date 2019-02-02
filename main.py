@@ -25,7 +25,7 @@ flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image s
 flags.DEFINE_boolean("train", False, "True for training, False for testing [False]")
 flags.DEFINE_integer("y_dim", 10, "The size of provided labels. [10]")
 flags.DEFINE_boolean("crop", False, "True for training, False for testing [False]")
-flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
+flags.DEFINE_boolean("visualize", True, "True for visualizing, False for nothing [False]")
 flags.DEFINE_boolean("use_can", False, "Use CAN implementation. [False]")
 flags.DEFINE_boolean("use_slim_can", False, "Use slim CAN implementation. [False]")
 FLAGS = flags.FLAGS
@@ -95,7 +95,7 @@ def main(_):
     # 1 = random batch
     # 2 = interpolation between -1 and 1
     # 3 = interpolation between 2 random vecs
-    OPTION = 1
+    OPTION = 3
     visualize(sess, dcgan, FLAGS, OPTION)
 
 if __name__ == '__main__':

@@ -4,15 +4,14 @@ python3 main.py \
 --learning_rate .0001 \
 --beta 0.5 \
 --batch_size 64 \
---input_height 32 \
---output_height 32 \
+--input_height 64 \
+--output_height 64 \
 --dataset wikiart \
 --data_dir ../dataset \
 --input_fname_pattern */*.jpg \
 --checkpoint_dir checkpoint \
 --sample_dir samples \
---crop True \
---visualize False \
 --use_slim_can \
 --y_dim 4 \
-#--train
+--train
+# if a boolean should be False, leave it out, e.g. '--crop False' is not working...
