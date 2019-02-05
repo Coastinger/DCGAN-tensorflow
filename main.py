@@ -28,6 +28,8 @@ flags.DEFINE_boolean("crop", False, "True for training, False for testing [False
 flags.DEFINE_boolean("visualize", True, "True for visualizing, False for nothing [False]")
 flags.DEFINE_boolean("use_can", False, "Use CAN implementation. [False]")
 flags.DEFINE_boolean("use_slim_can", False, "Use slim CAN implementation. [False]")
+flags.DEFINE_boolean("use_tiny_can", False, "Use tiny CAN implementation. [False]")
+flags.DEFINE_float('_lambda', 1, 'Scalar to controll style ambiguity of G loss.')
 FLAGS = flags.FLAGS
 
 def main(_):
@@ -65,7 +67,9 @@ def main(_):
           sample_dir=FLAGS.sample_dir,
           data_dir=FLAGS.data_dir,
           use_can=FLAGS.use_can,
-          use_slim_can=FLAGS.use_slim_can)
+          use_slim_can=FLAGS.use_slim_can,
+          use_tiny_can=FLAGS.use_tiny_can,
+          _lambda=FLAGS._lambda)
     else:
       dcgan = DCGAN(
           sess,
@@ -95,7 +99,7 @@ def main(_):
     # 1 = random batch
     # 2 = interpolation between -1 and 1
     # 3 = interpolation between 2 random vecs
-    OPTION = 3
+    OPTION = 1
     visualize(sess, dcgan, FLAGS, OPTION)
 
 if __name__ == '__main__':
