@@ -118,3 +118,14 @@ Details of the histogram of true and fake result of discriminator (with custom d
 ## Author
 
 Taehoon Kim / [@carpedm20](http://carpedm20.github.io/)
+
+## Usage:
+
+- Download Wikiart Dataset: [wikiart by cs-chan/ArtGAN] (https://github.com/cs-chan/ArtGAN/tree/master/WikiArt%20Dataset)
+- extract with zip (not ubuntu packaging system)
+- clean data (optional)
+- run convert_imgs_to_npy.py
+- download weights for NIMA: [NIMA-weights by titu1994/neural-Image-assessment] (https://github.com/titu1994/neural-image-assessment/releases)
+- copy weights in ./weights/
+- edit and run train_wikiart.py script
+

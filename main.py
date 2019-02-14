@@ -33,7 +33,9 @@ flags.DEFINE_float('_lambda', 1, 'Scalar to controll style ambiguity of G loss.'
 FLAGS = flags.FLAGS
 
 def main(_):
-  pp.pprint(flags.FLAGS.__flags)
+  #pp.pprint(flags.FLAGS.__flags)
+  for key in tf.app.flags.FLAGS.flag_values_dict():
+    print(key,'   :   ', FLAGS[key].value)
 
   if FLAGS.input_width is None:
     FLAGS.input_width = FLAGS.input_height
@@ -51,6 +53,7 @@ def main(_):
 
   with tf.Session(config=run_config) as sess:
     if FLAGS.dataset == 'mnist' or FLAGS.dataset == 'wikiart':
+      print('creating wikiart DCGAN')
       dcgan = DCGAN(
           sess,
           input_width=FLAGS.input_width,
@@ -96,10 +99,11 @@ def main(_):
         raise Exception("[!] Train a model first, then run test mode")
 
     # Below is codes for visualization
-    # 1 = random batch
-    # 2 = interpolation between -1 and 1
-    # 3 = interpolation between 2 random vecs
-    OPTION = 1
+    # 0 = random batch
+    # 1 = interpolation between -1 and 1
+    # 2 = interpolation between 2 random vecs
+    # 3 = chose 4 interpol corners
+    OPTION = 0
     visualize(sess, dcgan, FLAGS, OPTION)
 
 if __name__ == '__main__':
