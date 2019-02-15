@@ -23,6 +23,7 @@ flags.DEFINE_string("checkpoint_dir", "checkpoint", "Directory name to save the 
 flags.DEFINE_string("data_dir", "./data", "Root directory of dataset [data]")
 flags.DEFINE_string("sample_dir", "samples", "Directory name to save the image samples [samples]")
 flags.DEFINE_boolean("train", False, "True for training, False for testing [False]")
+flags.DEFINE_integer("G_optim_times", 2, "How many times G is optimised per batch. [2]")
 flags.DEFINE_integer("y_dim", 10, "The size of provided labels. [10]")
 flags.DEFINE_boolean("crop", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("visualize", True, "True for visualizing, False for nothing [False]")
@@ -30,6 +31,8 @@ flags.DEFINE_boolean("use_can", False, "Use CAN implementation. [False]")
 flags.DEFINE_boolean("use_slim_can", False, "Use slim CAN implementation. [False]")
 flags.DEFINE_boolean("use_tiny_can", False, "Use tiny CAN implementation. [False]")
 flags.DEFINE_float('_lambda', 1, 'Scalar to controll style ambiguity of G loss.')
+flags.DEFINE_boolean('use_resize_conv', False, 'If True use resize_conv otherwise deconv2d. [False]')
+flags.DEFINE_boolean('use_label_smoothing', False, 'If True use label smoothing [0.9 to 1.0] otherwise not. [False]')
 FLAGS = flags.FLAGS
 
 def main(_):
@@ -53,7 +56,7 @@ def main(_):
 
   with tf.Session(config=run_config) as sess:
     if FLAGS.dataset == 'mnist' or FLAGS.dataset == 'wikiart':
-      print('creating wikiart DCGAN')
+      print('[SETUP] Creating wikiart DCGAN.')
       dcgan = DCGAN(
           sess,
           input_width=FLAGS.input_width,
@@ -72,7 +75,10 @@ def main(_):
           use_can=FLAGS.use_can,
           use_slim_can=FLAGS.use_slim_can,
           use_tiny_can=FLAGS.use_tiny_can,
-          _lambda=FLAGS._lambda)
+          _lambda=FLAGS._lambda,
+          use_resize_conv=FLAGS.use_resize_conv,
+          use_label_smoothing=FLAGS.use_label_smoothing,
+          G_optim_times=FLAGS.G_optim_times)
     else:
       dcgan = DCGAN(
           sess,

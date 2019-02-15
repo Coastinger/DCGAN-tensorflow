@@ -97,7 +97,10 @@ def center_crop(x, crop_h, crop_w, resize_h=64, resize_w=64):
 
 def transform(image, input_height, input_width, resize_height=64, resize_width=64, crop=True):
   if crop:
-    cropped_image = center_crop(image, input_height, input_width, resize_height, resize_width)
+    if image.shape[0] > image.shape[1]:
+        cropped_image = center_crop(image, image.shape[1], image.shape[1], resize_height, resize_width)
+    else:
+        cropped_image = center_crop(image, image.shape[0], image.shape[0], resize_height, resize_width)
   else:
     cropped_image = scipy.misc.imresize(image, [resize_height, resize_width])
   return np.array(cropped_image)/127.5 - 1.
@@ -164,7 +167,7 @@ def visualize(sess, dcgan, config, option):
     model.load_weights('weights/mobilenet_weights.h5')
 
     samples_scaled = samples.copy() #inverse_transform(sample_inputs)
-    samples_exp = preprocess_input(samples_scaled) #np.expand_dims(samples, 0)
+    samples_exp = samples_scaled#preprocess_input(samples_scaled) #np.expand_dims(samples, 0)
 
     mean_list = []
     std_list = []
@@ -184,7 +187,7 @@ def visualize(sess, dcgan, config, option):
         mean_mean += mean
         std = std_score(scores)
         std_mean += std
-        #print('NIMA: ', mean, ' +- ', std)
+        print('NIMA: ', mean, ' +- ', std)
         mean_list.append((mean, sample))
         std_list.append((std, sample))
         score = mean * std
