@@ -156,7 +156,7 @@ class DCGAN(object):
     self.img2 = tf.placeholder(tf.float32, [None] + image_dims, name='mssim_img2')
     self.img1_yuv = tf.image.rgb_to_yuv(self.img1)
     self.img2_yuv = tf.image.rgb_to_yuv(self.img2)
-    self.mssim = tf.image.ssim_multiscale(self.img1_yuv, self.img2_yuv, max_val=1.0, power_factors=[0.0448])#, 0.25856])
+    self.mssim = tf.image.ssim_multiscale(self.img1_yuv, self.img2_yuv, max_val=1.0, power_factors=[0.0448]) #, 0.25856, 0.3001, 0.2363, 0.1333]) # params for different scales, insert in power_factors
     self.mssim_ = scalar_summary('mssim_batch_mean', tf.reduce_mean(self.mssim))
     self.ssim = tf.image.ssim(self.img1_yuv, self.img2_yuv, max_val=1.0)
     self.ssim_sum = scalar_summary('ssim_batch_mean', tf.reduce_mean(self.ssim))
@@ -177,7 +177,7 @@ class DCGAN(object):
         self.accuracy_sum = scalar_summary("accuracy", self.accuracy)
 
     if self.use_label_smoothing:
-        true_label = tf.random_uniform(tf.shape(self.D),.9, 1.0)
+        true_label = tf.random_uniform(tf.shape(self.D),.8, 1.0)
     else:
         true_label = 1.0
 
@@ -242,6 +242,8 @@ class DCGAN(object):
     else:
         print('[SETUP] Found sample z. Loading...')
         sample_z = np.load('./samples/sample_z.npy')
+        sample_z = sample_z[:self.batch_size]
+        print('loaded ', self.batch_size, ' sample_z files.')
 
     if config.dataset == 'mnist':
       sample_inputs = self.data_X[0:self.sample_num]
@@ -254,6 +256,8 @@ class DCGAN(object):
       else:
           print('[SETUP] Found sample files. Loading...')
           sample_files = np.load('./samples/sample_files.npy')
+          sample_files = sample_files[:self.batch_size]
+          print('loaded ', self.batch_size, ' sample files.')
       sample = [
           get_image(sample_file,
                     input_height=self.input_height,
@@ -529,6 +533,21 @@ class DCGAN(object):
             save_images(sorted_samples, image_manifold_size(sorted_samples.shape[0]),
                   './{}/TV_mean_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
 
+            '''
+            # --- test swap, mean / TV ---
+            tv_mean_list = []
+            for i, score in enumerate(total_var_list):
+                value = mean_list[i][0] / score[0]
+                tv_mean_list.append((value, score[1]))
+            tv_mean_list_sorted = sorted(tv_mean_list, key=lambda x: x[0], reverse=True)
+            sorted_samples = []
+            for score in tv_mean_list_sorted:
+                sorted_samples.append(score[1])
+            sorted_samples = np.array(sorted_samples)
+            save_images(sorted_samples, image_manifold_size(sorted_samples.shape[0]),
+                  './{}/TV_mean_swap_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
+            '''
+
             # TV / div
             tv_div_list = []
             for i, score in enumerate(total_var_list):
@@ -554,7 +573,7 @@ class DCGAN(object):
             sorted_samples = np.array(sorted_samples)
             save_images(sorted_samples, image_manifold_size(sorted_samples.shape[0]),
                   './{}/TV_mul_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
-
+            '''
             # nearest neighbors
             print('Start n-nearest: ', time.time() - start_time)
             examples = 5
@@ -600,7 +619,7 @@ class DCGAN(object):
             summary = tf.Summary(value=[tf.Summary.Value(tag='nearest_combo',simple_value=combo_)])
             self.writer.add_summary(summary, counter)
             print('End n-nearest: ', time.time() - start_time)
-
+            '''
           else:
             try:
               samples, d_loss, g_loss = self.sess.run(
@@ -651,8 +670,8 @@ class DCGAN(object):
         # real / fake
         h5 = linear(tf.reshape(h4, [self.batch_size, -1]), 1, 'd_h5_lin')
         # style classification
-        h6 = lrelu(linear(tf.reshape(h4, [self.batch_size, -1]), 1024, 'd_h6_lin'))
-        h7 = lrelu(linear(h6, 512, 'd_h7_lin'))
+        h6 = lrelu(linear(tf.reshape(h4, [self.batch_size, -1]), self.dfc_dim, 'd_h6_lin'))
+        h7 = lrelu(linear(h6, self.dfc_dim/2, 'd_h7_lin'))
         h8 = linear(h7, self.y_dim, 'd_h8_lin')
 
         return tf.nn.sigmoid(h5), h5, tf.nn.softmax(h8), h8
@@ -665,8 +684,8 @@ class DCGAN(object):
         # real / fake
         h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h4_lin')
         # style classification
-        h5 = lrelu(linear(tf.reshape(h3, [self.batch_size, -1]), 1024, 'd_h5_lin'))
-        h6 = lrelu(linear(h5, 512, 'd_h6_lin'))
+        h5 = lrelu(linear(tf.reshape(h3, [self.batch_size, -1]), self.dfc_dim/2, 'd_h5_lin'))
+        h6 = lrelu(linear(h5, self.dfc_dim/4, 'd_h6_lin'))
         h7 = linear(h6, self.y_dim, 'd_h7_lin')
 
         return tf.nn.sigmoid(h4), h4, tf.nn.softmax(h7), h7
@@ -678,8 +697,8 @@ class DCGAN(object):
         # real / fake
         h3 = linear(tf.reshape(h2, [self.batch_size, -1]), 1, 'd_h3_lin')
         # style classification
-        h4 = lrelu(linear(tf.reshape(h2, [self.batch_size, -1]), 512, 'd_h4_lin'))
-        h5 = lrelu(linear(h4, 256, 'd_h5_lin'))
+        h4 = lrelu(linear(tf.reshape(h2, [self.batch_size, -1]), self.dfc_dim/4, 'd_h4_lin'))
+        h5 = lrelu(linear(h4, self.dfc_dim/8, 'd_h5_lin'))
         h6 = linear(h5, self.y_dim, 'd_h6_lin')
 
         return tf.nn.sigmoid(h3), h3, tf.nn.softmax(h6), h6
@@ -698,8 +717,8 @@ class DCGAN(object):
         # real / fake
         r_out = linear(tf.reshape(h2, [self.batch_size, -1]), 1, 'd_ro_lin')
         # style classification
-        h3 = lrelu(linear(h2, 1024, 'd_h3_lin'))
-        h4 = lrelu(linear(h3, 512, 'd_h4_lin'))
+        h3 = lrelu(linear(h2, self.dfc_dim, 'd_h3_lin'))
+        h4 = lrelu(linear(h3, self.dfc_dim/2, 'd_h4_lin'))
         c_out = linear(h4, self.y_dim, 'd_co_lin')
 
         return tf.nn.sigmoid(r_out), r_out, tf.nn.softmax(c_out), c_out

@@ -109,8 +109,9 @@ def main(_):
     # 1 = interpolation between -1 and 1
     # 2 = interpolation between 2 random vecs
     # 3 = chose 4 interpol corners
-    OPTION = 0
+    OPTION = 6
     visualize(sess, dcgan, FLAGS, OPTION)
+    #visualize(sess, dcgan, FLAGS, 3)
 
 if __name__ == '__main__':
   tf.app.run()

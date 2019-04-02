@@ -342,7 +342,7 @@ def visualize(sess, dcgan, config, option):
     C = z_sample[get_last_norms[2]]
     D = z_sample[get_last_norms[3]]
     '''
-    '''
+
     # create dist matrix
     dist_matrix = cdist(z_sample, np.zeros(z_sample.shape), 'euclidean')
     print('dist_matrix: ', dist_matrix)
@@ -350,20 +350,21 @@ def visualize(sess, dcgan, config, option):
     print(dist_matrix[0].argsort())
     three_far_away = dist_matrix[0].argsort()[-3:]
     A = z_sample[0]
-    B = z_sample[three_far_away[0]]
+    B = z_sample[three_far_away[2]]
     C = z_sample[three_far_away[1]]
-    D = z_sample[three_far_away[2]]
+    D = z_sample[three_far_away[0]]
     '''
     # pick corners
     A = z_sample[0]
     B = z_sample[1]
     C = z_sample[3]
     D = z_sample[4]
-
+    '''
     # save corner samples
     chosen = np.reshape(np.concatenate((A,B,C,D)), [4,-1])
-    samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: chosen})
-    save_images(samples, [2, 2], './samples/test_4_chosen_corners_%s.png' % strftime("%Y-%m-%d-%H-%M-%S", gmtime()))
+    print(chosen.shape)
+    #samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: chosen})
+    #save_images(samples, [2, 2], './samples/test_4_chosen_corners_%s.png' % strftime("%Y-%m-%d-%H-%M-%S", gmtime()))
     # create interpolation grid
     # NOTE: chosen corners are not displayed on grid
     grid = np.ones([config.batch_size, dcgan.z_dim])
@@ -376,6 +377,7 @@ def visualize(sess, dcgan, config, option):
                 + B * (((x-x1)*(y2-y))/((x2-x1)*(y2-y1))) \
                 + C * (((x2-x)*(y-y1))/((x2-x1)*(y2-y1))) \
                 + D * (((x-x1)*(y-y1))/((x2-x1)*(y2-y1)))
+    print('grid grid!')
     samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: grid})
     print(samples.shape)
     save_images(samples, [image_frame_dim, image_frame_dim], './samples/test_inter_4_chosen_corners_%s.png' % strftime("%Y-%m-%d-%H-%M-%S", gmtime()))
@@ -424,6 +426,121 @@ def visualize(sess, dcgan, config, option):
     mean_img /= len(data)
     print(mean_img.shape)
     save_images(np.expand_dims(mean_img, 0), [1,1], 'mean.png')
+
+  elif option == 6:
+    print('option 6, selekt best of batch.')
+    '''
+    z_sample = np.random.normal(0, 1, size=(config.batch_size, dcgan.z_dim))
+    samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
+
+    samples_scaled = inverse_transform(samples)
+    total_var, summary_str = sess.run([dcgan.total_var, dcgan.total_var_sum], feed_dict={dcgan.img1: samples_scaled})
+    total_var_list = []
+    [total_var_list.append((total_var[i], samples[i])) for i, elem in enumerate(total_var)]
+
+    base_model = MobileNet((None, None, 3), alpha=1, include_top=False, pooling='avg', weights=None)
+    x = Dropout(0.75)(base_model.output)
+    x = Dense(10, activation='softmax')(x)
+    model = Model(base_model.input, x)
+    model.load_weights('weights/mobilenet_weights.h5')
+
+    samples_scaled = samples.copy()
+    samples_exp = samples_scaled
+
+    mean_list = []
+    mean_mean = 0
+    for sample in samples_exp:
+        x = sample
+        x = np.expand_dims(x, 0)
+        scores = model.predict(x, batch_size=1, verbose=0)[0]
+
+        mean = mean_score(scores)
+        mean_mean += mean
+        std = std_score(scores)
+        print('NIMA: ', mean, ' +- ', std)
+        mean_list.append((mean, sample))
+
+    save_images(samples, [image_frame_dim, image_frame_dim], './samples/test_%s.png' % strftime("%Y-%m-%d-%H-%M-%S", gmtime()))
+
+    # TV / mean
+    combo_var_mean = []
+    for i, var in enumerate(total_var_list):
+        x = var[0] / mean_list[i][0]
+        combo_var_mean.append((x, var[1]))
+    '''
+    current = 1000
+    best_so_far = 100000
+    best = None
+    for i in range(100):
+        combo_var_mean = generate(config, dcgan, sess, image_frame_dim)
+        combo_var_mean_sorted = sorted(combo_var_mean, key=lambda x: x[0], reverse=True)
+        if combo_var_mean_sorted[-1][0] < best_so_far:
+            best = combo_var_mean_sorted
+            best_so_far = combo_var_mean_sorted[-1][0]
+        #current = combo_var_mean_sorted[-1][0]
+        print('Iteration: ', str(i), ' score: ', combo_var_mean_sorted[-1][0], ' best so far: ', best_so_far)
+        #if best <
+        #if current < 100:
+        #    print('Generated image below threshold.')
+        #    break
+
+    combo_var_mean_sorted = best
+    print('best value: ', combo_var_mean_sorted[-1][0])
+    print('second value: ', combo_var_mean_sorted[-2][0])
+    print('third value: ', combo_var_mean_sorted[-3][0])
+    print('worst value: ', combo_var_mean_sorted[0][0])
+    best_img = np.expand_dims(combo_var_mean_sorted[-1][1], 0)
+    save_images(best_img, [1,1],
+          './samples/test_best_of_batch_%s.png' % strftime("%Y-%m-%d-%H-%M-%S", gmtime()))
+    best_img = np.expand_dims(combo_var_mean_sorted[-2][1], 0)
+    save_images(best_img, [1,1],
+        './samples/test_second_of_batch_%s.png' % strftime("%Y-%m-%d-%H-%M-%S", gmtime()))
+    best_img = np.expand_dims(combo_var_mean_sorted[-3][1], 0)
+    save_images(best_img, [1,1],
+          './samples/test_third_of_batch_%s.png' % strftime("%Y-%m-%d-%H-%M-%S", gmtime()))
+    best_img = np.expand_dims(combo_var_mean_sorted[0][1], 0)
+    save_images(best_img, [1,1],
+        './samples/test_worst_of_batch_%s.png' % strftime("%Y-%m-%d-%H-%M-%S", gmtime()))
+
+def generate(config, dcgan, sess, image_frame_dim):
+    z_sample = np.random.normal(0, 1, size=(config.batch_size, dcgan.z_dim))
+    samples = sess.run(dcgan.sampler, feed_dict={dcgan.z: z_sample})
+
+    samples_scaled = inverse_transform(samples)
+    total_var, summary_str = sess.run([dcgan.total_var, dcgan.total_var_sum], feed_dict={dcgan.img1: samples_scaled})
+    total_var_list = []
+    [total_var_list.append((total_var[i], samples[i])) for i, elem in enumerate(total_var)]
+
+    base_model = MobileNet((None, None, 3), alpha=1, include_top=False, pooling='avg', weights=None)
+    x = Dropout(0.75)(base_model.output)
+    x = Dense(10, activation='softmax')(x)
+    model = Model(base_model.input, x)
+    model.load_weights('weights/mobilenet_weights.h5')
+
+    samples_scaled = samples.copy()
+    samples_exp = samples_scaled
+
+    mean_list = []
+    mean_mean = 0
+    for sample in samples_exp:
+        x = sample
+        x = np.expand_dims(x, 0)
+        scores = model.predict(x, batch_size=1, verbose=0)[0]
+
+        mean = mean_score(scores)
+        mean_mean += mean
+        std = std_score(scores)
+        #print('NIMA: ', mean, ' +- ', std)
+        mean_list.append((mean, sample))
+
+    #save_images(samples, [image_frame_dim, image_frame_dim], './samples/test_%s.png' % strftime("%Y-%m-%d-%H-%M-%S", gmtime()))
+
+    # TV / mean
+    combo_var_mean = []
+    for i, var in enumerate(total_var_list):
+        x = var[0] / mean_list[i][0]
+        combo_var_mean.append((x, var[1]))
+    return combo_var_mean
 
 # github: dribnet/plat - spherical interpolation (with boundarie [-1,1])
 def slerp(val, low, high):
